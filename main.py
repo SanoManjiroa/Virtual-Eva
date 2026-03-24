@@ -1,3 +1,5 @@
+import os
+
 import pygame
 import sys
 import time
@@ -5,6 +7,7 @@ import asyncio
 import threading
 import edge_tts
 import speech_recognition as sr
+import tempfile
 
 # -------------------------------
 # Initialize Pygame
@@ -26,7 +29,7 @@ right_arm_img = pygame.image.load("eva_right_arm.png").convert_alpha()
 # -------------------------------
 # Positions for centered EVA
 body_pos = [WIDTH//2 - body_img.get_width()//2, HEIGHT//2 - body_img.get_height()//2]
-head_pos = [body_pos[0] + (body_img.get_width()//2 - head_img.get_width()//2), body_pos[1] - head_img.get_height() + 20]
+head_pos = [body_pos[0]+20 + (body_img.get_width()//2 - head_img.get_width()//2), body_pos[1] - head_img.get_height() + 10]
 left_arm_pos = [body_pos[0] - left_arm_img.get_width() + 20, body_pos[1] + 50]
 right_arm_pos = [body_pos[0] + body_img.get_width() - 20, body_pos[1] + 50]
 
@@ -41,15 +44,27 @@ start_time = time.time()
 
 # -------------------------------
 # TTS function
-async def generate_and_play_tts(text, filename="eva_speech.mp3"):
-    communicate = edge_tts.Communicate(text, "en-US-JennyNeural")
-    await communicate.save(filename)
-    pygame.mixer.music.load(filename)
-    pygame.mixer.music.play()
 
 def speak_in_thread(text):
-    asyncio.run(generate_and_play_tts(text))
+    # Create a temporary MP3 file for this speech
+    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".mp3")
+    tmp_filename = tmp_file.name
+    tmp_file.close()  # close so edge_tts can write to it
 
+    async def tts_and_play():
+        communicate = edge_tts.Communicate(text, "en-US-JennyNeural")
+        await communicate.save(tmp_filename)  # save to temp file
+        pygame.mixer.music.load(tmp_filename)  # load into pygame
+        pygame.mixer.music.play()
+        # Wait until finished playing then delete
+        while pygame.mixer.music.get_busy():
+            pygame.time.wait(100)
+        try:
+            os.remove(tmp_filename)
+        except:
+            pass
+
+    threading.Thread(target=lambda: asyncio.run(tts_and_play()), daemon=True).start()
 # -------------------------------
 # Speech listening function
 def listen_and_respond():
@@ -63,7 +78,9 @@ def listen_and_respond():
             text = recognizer.recognize_google(audio)
             print("You said:", text)
             if "hello" in text.lower():
-                threading.Thread(target=speak_in_thread, args=("Hello! Nice to meet you.",), daemon=True).start()
+                threading.Thread(target=speak_in_thread, args=("Hello! Nice to meet you Shukrona I love you too.",), daemon=True).start()
+            if "good night" in text.lower():
+                threading.Thread(target=speak_in_thread, args=("Sherali Nice to meet you . Yakshi ukhla ",), daemon=True).start()
             elif "how are you" in text.lower():
                 threading.Thread(target=speak_in_thread, args=("I am fine, thank you!",), daemon=True).start()
         except:
